@@ -750,7 +750,6 @@ function ProductsAdmin() {
 }
 
 
-}
 function LocationsAdmin() {
   const [rows, setRows] = useState<Location[]>([]);
   const [name, setName] = useState("");
