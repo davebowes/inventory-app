@@ -1,4 +1,4 @@
-$schema = "node_modules/wrangler/config-schema.json"
+# $schema = "node_modules/wrangler/config-schema.json"
 name = "inventory-app"
 compatibility_date = "2025-11-11"
 

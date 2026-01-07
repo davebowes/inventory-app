@@ -192,7 +192,6 @@ function OnHand() {
     </div>
   </div>
 )}
->Cancel</button>
                   <button className="primary" onClick={saveLocations}>Save</button>
                 </div>
               </div>
