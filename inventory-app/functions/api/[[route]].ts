@@ -182,6 +182,54 @@ app.post("/api/onhand", async (c) => {
   return c.json({ ok: true });
 });
 
+app.get("/api/location-items", async (c) => {
+  const locationId = Number(c.req.query("locationId") ?? "0");
+  if (!locationId) return c.json({ error: "locationId required" }, 400);
+
+  const r = await c.env.DB.prepare(`
+    SELECT
+      s.id as sku_id,
+      p.name as product,
+      s.sku_code as sku,
+      pl.par_qty_tenths as par_tenths,
+      COALESCE(oh.on_hand_qty_tenths, 0) as on_hand_tenths
+    FROM par_levels pl
+    JOIN skus s ON s.id = pl.sku_id
+    JOIN products p ON p.id = s.product_id
+    LEFT JOIN on_hand oh ON oh.sku_id = pl.sku_id AND oh.location_id = pl.location_id
+    WHERE pl.location_id = ? AND p.is_active=1 AND s.is_active=1
+    ORDER BY p.name
+  `).bind(locationId).all();
+
+  return c.json(r.results);
+});
+
+app.post("/api/onhand/bulk", async (c) => {
+  const body = await c.req.json<{ locationId: number; items: { skuId: number; onHand: number }[] }>();
+  const locationId = Number(body.locationId);
+  if (!locationId) return c.json({ ok: false, message: "locationId required" }, 400);
+
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (items.length === 0) return c.json({ ok: false, message: "No items provided" }, 400);
+
+  const stmt = c.env.DB.prepare(`
+    INSERT INTO on_hand (sku_id, location_id, on_hand_qty_tenths, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(sku_id, location_id)
+    DO UPDATE SET on_hand_qty_tenths=excluded.on_hand_qty_tenths, updated_at=datetime('now')
+  `);
+
+  // Use a D1 batch for speed
+  const batch = items.map((it) => {
+    const skuId = Number(it.skuId);
+    const onHandTenths = toTenths(Number(it.onHand));
+    return stmt.bind(skuId, locationId, onHandTenths);
+  });
+
+  await c.env.DB.batch(batch);
+  return c.json({ ok: true, message: `Saved ${items.length} items.` });
+});
+
 app.get("/api/reorder", async (c) => {
   const data = await buildReorder(c.env);
   return c.json(data);

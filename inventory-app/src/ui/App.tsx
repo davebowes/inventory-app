@@ -45,11 +45,12 @@ export default function App() {
 function OnHand() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationId, setLocationId] = useState<number | null>(null);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ sku_id: number; product: string; sku: string | null }[]>([]);
-  const [skuId, setSkuId] = useState<number | null>(null);
-  const [onHand, setOnHand] = useState<string>("0.0");
+
+  const [rows, setRows] = useState<{ sku_id: number; product: string; sku: string | null; par_tenths: number; on_hand_tenths: number }[]>([]);
+  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string>("");
+
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     api<Location[]>("/api/locations").then((d) => {
@@ -58,64 +59,128 @@ function OnHand() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
-    const t = setTimeout(() => {
-      api<typeof results>(`/api/search?query=${encodeURIComponent(query)}`).then(setResults).catch(() => setResults([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [query]);
-
-  async function save() {
+  async function loadItems(locId: number) {
+    setLoading(true);
     setMsg("");
-    if (!locationId || !skuId) { setMsg("Pick a location and an item."); return; }
-    const v = Number(onHand);
-    if (Number.isNaN(v)) { setMsg("On-hand must be a number like 0.0 or 2.3"); return; }
-    await api("/api/onhand", { method: "POST", body: JSON.stringify({ locationId, skuId, onHand: v }) });
-    setMsg("Saved.");
+    try {
+      const data = await api<typeof rows>(`/api/location-items?locationId=${encodeURIComponent(String(locId))}`);
+      setRows(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (locationId) loadItems(locationId);
+  }, [locationId]);
+
+  const shown = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(r =>
+      r.product.toLowerCase().includes(q) || (r.sku ? r.sku.toLowerCase().includes(q) : false)
+    );
+  }, [rows, filter]);
+
+  function tenthsToStr(t: number) {
+    return (t / 10).toFixed(1);
+  }
+
+  function updateOnHand(sku_id: number, valueStr: string) {
+    const v = Number(valueStr);
+    if (Number.isNaN(v)) return;
+    const tenths = Math.round(v * 10);
+    setRows(prev => prev.map(r => r.sku_id === sku_id ? { ...r, on_hand_tenths: tenths } : r));
+  }
+
+  async function saveAll() {
+    setMsg("");
+    if (!locationId) { setMsg("Pick a location."); return; }
+    setLoading(true);
+    try {
+      const payload = {
+        locationId,
+        items: rows.map(r => ({ skuId: r.sku_id, onHand: Number(tenthsToStr(r.on_hand_tenths)) }))
+      };
+      const resp = await api<{ ok: boolean; message: string }>("/api/onhand/bulk", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      setMsg(resp.message || "Saved.");
+      await loadItems(locationId);
+    } catch (e: any) {
+      setMsg(e?.message || "Error saving.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <Section title="On‑Hand Entry">
+    <Section title="On‑Hand Entry (by location)">
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", alignItems: "center" }}>
         <label>
           Location<br />
-          <select value={locationId ?? ""} onChange={(e) => setLocationId(Number(e.target.value))} style={{ width: "100%" }}>
+          <select
+            value={locationId ?? ""}
+            onChange={(e) => setLocationId(Number(e.target.value))}
+            style={{ width: "100%" }}
+          >
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </label>
 
         <label>
-          Search Product / SKU<br />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Type a product name or SKU…" style={{ width: "100%" }} />
+          Filter (optional)<br />
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Type product or SKU to filter…"
+            style={{ width: "100%" }}
+          />
         </label>
       </div>
 
-      {results.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Matches</div>
-          <div style={{ display: "grid", gap: 6 }}>
-            {results.slice(0, 12).map((r) => (
-              <button key={r.sku_id} onClick={() => { setSkuId(r.sku_id); setQuery(`${r.product}${r.sku ? " ("+r.sku+")" : ""}`); setResults([]); }}>
-                {r.product}{r.sku ? ` — ${r.sku}` : ""}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginTop: 12, alignItems: "center" }}>
-        <label>
-          On‑hand (0.1 increments)<br />
-          <input value={onHand} onChange={(e) => setOnHand(e.target.value)} style={{ width: "100%" }} />
-        </label>
-        <div>
-          <br />
-          <button onClick={save} style={{ width: "100%" }}>Save On‑Hand</button>
-        </div>
+      <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={() => locationId && loadItems(locationId)} disabled={!locationId || loading}>Refresh</button>
+        <button onClick={saveAll} disabled={!locationId || loading || rows.length === 0}>Save All On‑Hands</button>
       </div>
 
       {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
+      {loading && <div style={{ marginTop: 10 }}>Loading…</div>}
+
+      {!loading && rows.length === 0 ? (
+        <div style={{ marginTop: 12 }}>
+          No items found for this location yet. (This usually means the database seed hasn’t been loaded.)
+        </div>
+      ) : (
+        <div style={{ marginTop: 12, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Product</th>
+                <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>SKU</th>
+                <th align="right" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>On‑hand</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((r) => (
+                <tr key={r.sku_id}>
+                  <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>{r.product}</td>
+                  <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>{r.sku ?? ""}</td>
+                  <td style={{ borderBottom: "1px solid #f3f3f3", padding: "6px 6px" }} align="right">
+                    <input
+                      value={tenthsToStr(r.on_hand_tenths)}
+                      onChange={(e) => updateOnHand(r.sku_id, e.target.value)}
+                      style={{ width: 90, textAlign: "right" }}
+                      inputMode="decimal"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Section>
   );
 }
