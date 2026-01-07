@@ -269,6 +269,36 @@ app.put("/api/skus/:id/par", async (c) => {
   return c.json({ ok: true });
 });
 
+
+app.get("/api/skus/:id/locations", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
+  const r = await c.env.DB.prepare(`
+    SELECT l.id, l.name
+    FROM sku_locations sl
+    JOIN locations l ON l.id = sl.location_id
+    WHERE sl.sku_id = ?
+    ORDER BY l.name
+  `).bind(id).all();
+  return c.json(r.results);
+});
+
+app.put("/api/skus/:id/locations", async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ locationIds: number[] }>();
+  if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
+  const locs = Array.isArray(body.locationIds) ? body.locationIds.map(Number).filter(Boolean) : [];
+
+  // Replace mapping (simple + predictable)
+  await c.env.DB.prepare("DELETE FROM sku_locations WHERE sku_id=?").bind(id).run();
+
+  if (locs.length) {
+    const stmt = c.env.DB.prepare("INSERT INTO sku_locations (sku_id, location_id) VALUES (?, ?)");
+    await c.env.DB.batch(locs.map((lid) => stmt.bind(id, lid)));
+  }
+  return c.json({ ok: true });
+});
+
 // ----- Admin / Settings CRUD -----
 
 app.get("/api/material-types", async (c) => {
