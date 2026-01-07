@@ -7,6 +7,7 @@ type Location = {
   id: number;
   name: string;
 };
+type MaterialType = { id: number; name: string };
 
 type Product = {
   id: number;
@@ -75,6 +76,7 @@ function Settings() {
     </Card>
   );
 }
+
 
 /* =====================
    LOCATIONS ADMIN
