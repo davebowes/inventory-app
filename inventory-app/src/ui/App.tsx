@@ -12,31 +12,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <>
-      <div className="topbar">
-        <div className="topbar-inner">
-          <div className="brand"><span className="dot"></span><div><h1>Inventory</h1><div className="muted">FASTSIGNS Inventory & Ordering</div></div></div>
-          <div className="tabs">
-            <button className={`tabbtn ${view==="onhand" ? "active":""}`} onClick={() => setView("onhand")}>On‑Hand</button>
-            <button className={`tabbtn ${view==="reorder" ? "active":""}`} onClick={() => setView("reorder")}>Reorder</button>
-            <button className={`tabbtn ${view==="settings" ? "active":""}`} onClick={() => setView("settings")}>Settings</button>
-          </div>
-        </div>
-      </div>
-      <div className="wrap">
+    <div style={{ border: "1px solid #e6e6e6", borderRadius: 12, padding: 12, marginBottom: 12 }}>
       <div style={{ fontWeight: 800, marginBottom: 10 }}>{title}</div>
       {children}
-    
-      </div>
-
-      <div className="bottomnav">
-        <div className="bottomnav-inner">
-          <button className={`navitem ${view==="onhand" ? "active":""}`} onClick={() => setView("onhand")}>On‑Hand</button>
-          <button className={`navitem ${view==="reorder" ? "active":""}`} onClick={() => setView("reorder")}>Reorder</button>
-          <button className={`navitem ${view==="settings" ? "active":""}`} onClick={() => setView("settings")}>Settings</button>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -44,142 +23,18 @@ export default function App() {
   const [tab, setTab] = useState<"onhand" | "reorder" | "settings">("onhand");
 
   return (
-    <>
-      <div className="topbar">
-        <div className="topbar-inner">
-          <div className="brand"><span className="dot"></span><div><h1>Inventory</h1><div className="muted">FASTSIGNS Inventory & Ordering</div></div></div>
-          <div className="tabs">
-            <button className={`tabbtn ${view==="onhand" ? "active":""}`} onClick={() => setView("onhand")}>On‑Hand</button>
-            <button className={`tabbtn ${view==="reorder" ? "active":""}`} onClick={() => setView("reorder")}>Reorder</button>
-            <button className={`tabbtn ${view==="settings" ? "active":""}`} onClick={() => setView("settings")}>Settings</button>
-          </div>
-        </div>
-      </div>
-      <div className="wrap">
-      <style>{`
-  :root{
-    --fs-red:#E31837;
-    --fs-red-dark:#c5142e;
-    --fs-bg:#f6f7f9;
-    --fs-card:#ffffff;
-    --fs-text:#0f172a;
-    --fs-muted:#64748b;
-    --fs-border:#e5e7eb;
-    --radius:16px;
-    --shadow: 0 10px 30px rgba(2,6,23,.08);
-  }
-  *{ box-sizing:border-box; }
-  body{ margin:0; background:var(--fs-bg); color:var(--fs-text); }
-  a{ color:inherit; }
-  h1{ font-size:22px; margin:0; letter-spacing:.2px; }
-  .wrap{ max-width:1100px; margin:0 auto; padding:16px; padding-bottom:90px; }
-  .topbar{
-    position: sticky; top: 0; z-index: 20;
-    backdrop-filter: blur(8px);
-    background: rgba(246,247,249,.85);
-    border-bottom:1px solid var(--fs-border);
-  }
-  .topbar-inner{ max-width:1100px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  .brand{ display:flex; align-items:center; gap:10px; }
-  .dot{ width:10px; height:10px; border-radius:999px; background:var(--fs-red); box-shadow:0 0 0 4px rgba(227,24,55,.15); }
-  .tabs{ display:flex; gap:8px; flex-wrap:wrap; }
-  .tabbtn{
-    padding:10px 12px;
-    border-radius:999px;
-    border:1px solid var(--fs-border);
-    background:var(--fs-card);
-    cursor:pointer;
-    font-weight:700;
-    color:var(--fs-text);
-  }
-  .tabbtn.active{ border-color: rgba(227,24,55,.35); background: rgba(227,24,55,.08); }
-  .card{
-    background:var(--fs-card);
-    border:1px solid var(--fs-border);
-    border-radius:var(--radius);
-    box-shadow:var(--shadow);
-    padding:14px;
-  }
-  .muted{ color:var(--fs-muted); font-size:13px; }
-  button{
-    padding:10px 12px;
-    border-radius:12px;
-    border:1px solid var(--fs-border);
-    background:var(--fs-card);
-    cursor:pointer;
-    font-weight:700;
-  }
-  button:hover{ background:#fafafa; }
-  button.primary{
-    background:var(--fs-red);
-    border-color:var(--fs-red);
-    color:white;
-  }
-  button.primary:hover{ background:var(--fs-red-dark); }
-  input, select, textarea{
-    width:100%;
-    padding:10px 12px;
-    border-radius:12px;
-    border:1px solid var(--fs-border);
-    background:white;
-    outline:none;
-  }
-  input:focus, select:focus, textarea:focus{
-    border-color: rgba(227,24,55,.5);
-    box-shadow:0 0 0 3px rgba(227,24,55,.12);
-  }
-  table{ width:100%; border-collapse:collapse; }
-  th{ text-align:left; font-size:12px; color:var(--fs-muted); padding:10px 8px; border-bottom:1px solid var(--fs-border); }
-  td{ padding:10px 8px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
-  .row-actions{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
-  .grid2{ display:grid; gap:12px; grid-template-columns: 1fr 1fr; }
-  @media (max-width: 760px){
-    .grid2{ grid-template-columns: 1fr; }
-    .tabs{ display:none; }
-  }
-  .bottomnav{
-    position:fixed; left:0; right:0; bottom:0; z-index:25;
-    border-top:1px solid var(--fs-border);
-    background: rgba(255,255,255,.92);
-    backdrop-filter: blur(8px);
-    display:none;
-  }
-  @media (max-width:760px){
-    .bottomnav{ display:block; }
-  }
-  .bottomnav-inner{
-    max-width:1100px; margin:0 auto; padding:10px 12px;
-    display:flex; gap:8px; justify-content:space-between;
-  }
-  .navitem{
-    flex:1; text-align:center;
-    padding:10px 8px;
-    border-radius:14px;
-    border:1px solid transparent;
-    font-weight:800;
-    color:var(--fs-muted);
-    background:transparent;
-  }
-  .navitem.active{ color:var(--fs-red); background: rgba(227,24,55,.08); border-color: rgba(227,24,55,.18); }
-  .pill{
-    display:inline-flex; align-items:center; gap:8px;
-    padding:6px 10px; border-radius:999px;
-    border:1px solid var(--fs-border); background:white;
-    font-size:12px; color:var(--fs-muted);
-  }
-  .checklist{
-    display:grid; gap:8px;
-    grid-template-columns: repeat(2, minmax(0,1fr));
-  }
-  @media (max-width:760px){
-    .checklist{ grid-template-columns: 1fr; }
-  }
-  .check{
-    display:flex; align-items:center; gap:10px;
-    padding:10px 12px; border:1px solid var(--fs-border);
-    border-radius:12px; background:white;
-  }
-  .check input{ width:18px; height:18px; padding:0; }
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial" }}>
+      <style>{`/* UI_STYLES */
+:root{ --fs-red:#E31837; --fs-bg:#f6f7f9; --fs-card:#ffffff; --fs-text:#0f172a; --fs-muted:#64748b; --fs-border:#e5e7eb; }
+body{ background:var(--fs-bg); color:var(--fs-text); }
+h1{ font-size:26px; margin:0 0 8px 0; }
+button{ padding:10px 12px; border-radius:12px; border:1px solid var(--fs-border); background:var(--fs-card); cursor:pointer; font-weight:700; }
+button:hover{ background:#fafafa; }
+button.primary{ background:var(--fs-red); border-color:var(--fs-red); color:white; }
+button.primary:hover{ filter:brightness(.95); }
+input, select{ padding:10px 12px; border-radius:12px; border:1px solid var(--fs-border); background:white; }
+table{ width:100%; border-collapse:collapse; }
+th{ font-size:12px; color:var(--fs-muted); text-transform:none; }
 `}</style>
       <h1 style={{ margin: "6px 0 14px" }}>Inventory App</h1>
 
@@ -195,17 +50,7 @@ export default function App() {
       <div style={{ marginTop: 24, fontSize: 12, color: "#666" }}>
         Tip: PAR + On‑hand are stored to 0.1, but order quantities are whole units (rounded up).
       </div>
-    
-      </div>
-
-      <div className="bottomnav">
-        <div className="bottomnav-inner">
-          <button className={`navitem ${view==="onhand" ? "active":""}`} onClick={() => setView("onhand")}>On‑Hand</button>
-          <button className={`navitem ${view==="reorder" ? "active":""}`} onClick={() => setView("reorder")}>Reorder</button>
-          <button className={`navitem ${view==="settings" ? "active":""}`} onClick={() => setView("settings")}>Settings</button>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -309,40 +154,59 @@ function OnHand() {
 
       <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button onClick={() => locationId && loadItems(locationId)} disabled={!locationId || loading}>Refresh</button>
-        <button onClick={saveAll} disabled={!locationId || loading || rows.length === 0} className="primary">Save On‑Hands</button>
+        <button className="primary" onClick={saveAll} disabled={!locationId || loading || rows.length === 0}>Save On‑Hands</button>
       </div>
 
       {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
 
-          {editingSku && (
-            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 16, background: "white" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 900 }}>Stocked Locations</div>
-                  <div className="muted">{editingLabel} — select all locations where this item can be stored / counted.</div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => setEditingSku(null)}>Cancel</button>
-                  <button className="primary" onClick={saveLocations}>Save Locations</button>
+          
+{editingSku && (
+  <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <div>
+        <div style={{ fontWeight: 900 }}>Stock locations</div>
+        <div style={{ color: "var(--fs-muted)", fontSize: 13 }}>{editingName}</div>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setEditingSku(null)}>Cancel</button>
+        <button className="primary" onClick={saveLocations}>Save</button>
+      </div>
+    </div>
+
+    <div style={{ marginTop: 10, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+      {locations.map((l) => (
+        <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 12px", border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
+          <input
+            type="checkbox"
+            checked={editingLocIds.includes(l.id)}
+            onChange={() => toggleLoc(l.id)}
+            style={{ width: 18, height: 18 }}
+          />
+          <span style={{ fontWeight: 700 }}>{l.name}</span>
+        </label>
+      ))}
+    </div>
+
+    <div style={{ marginTop: 10 }} className="muted">
+      Tip: assign a product to every location where you might count it. Reorder still uses the TOTAL on‑hand across all locations.
+    </div>
+  </div>
+)}
+>Cancel</button>
+                  <button className="primary" onClick={saveLocations}>Save</button>
                 </div>
               </div>
-
-              <div style={{ marginTop: 12 }} className="checklist">
+              <div style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
                 {locations.map((l) => (
-                  <label key={l.id} className="check">
-                    <input
-                      type="checkbox"
-                      checked={editingLocIds.includes(l.id)}
-                      onChange={(e) => {
-                        setEditingLocIds((prev) => e.target.checked ? [...prev, l.id] : prev.filter((x) => x !== l.id));
-                      }}
-                    />
+                  <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: 10, border: "1px solid var(--fs-border)", borderRadius: 12 }}>
+                    <input type="checkbox" checked={editingLocIds.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 18, height: 18 }} />
                     <span>{l.name}</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
+
       {loading && <div style={{ marginTop: 10 }}>Loading…</div>}
 
       {!loading && rows.length === 0 ? (
@@ -434,7 +298,7 @@ function Reorder() {
           Additional emails (optional, comma-separated)<br />
           <input value={additionalEmails} onChange={(e) => setAdditionalEmails(e.target.value)} placeholder="extra@company.com, another@company.com" style={{ width: "100%" }} />
         </label>
-        <button onClick={send} style={{ marginTop: 10 }} className="primary">Confirm & Send</button>
+        <button onClick={send} style={{ marginTop: 10 }}>Confirm & Send</button>
         {status && <div style={{ marginTop: 10 }}>{status}</div>}
       </div>
     </Section>
@@ -444,18 +308,7 @@ function Reorder() {
 function SettingsView() {
   const [tab, setTab] = useState<"email" | "locations" | "materials" | "products" | "par">("email");
   return (
-    <>
-      <div className="topbar">
-        <div className="topbar-inner">
-          <div className="brand"><span className="dot"></span><div><h1>Inventory</h1><div className="muted">FASTSIGNS Inventory & Ordering</div></div></div>
-          <div className="tabs">
-            <button className={`tabbtn ${view==="onhand" ? "active":""}`} onClick={() => setView("onhand")}>On‑Hand</button>
-            <button className={`tabbtn ${view==="reorder" ? "active":""}`} onClick={() => setView("reorder")}>Reorder</button>
-            <button className={`tabbtn ${view==="settings" ? "active":""}`} onClick={() => setView("settings")}>Settings</button>
-          </div>
-        </div>
-      </div>
-      <div className="wrap">
+    <div style={{ display: "grid", gap: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button onClick={() => setTab("email")}>Email</button>
         <button onClick={() => setTab("locations")}>Locations</button>
@@ -469,17 +322,7 @@ function SettingsView() {
       {tab === "materials" && <MaterialsAdmin />}
       {tab === "products" && <ProductsAdmin />}
       {tab === "par" && <GlobalParAdmin />}
-    
-      </div>
-
-      <div className="bottomnav">
-        <div className="bottomnav-inner">
-          <button className={`navitem ${view==="onhand" ? "active":""}`} onClick={() => setView("onhand")}>On‑Hand</button>
-          <button className={`navitem ${view==="reorder" ? "active":""}`} onClick={() => setView("reorder")}>Reorder</button>
-          <button className={`navitem ${view==="settings" ? "active":""}`} onClick={() => setView("settings")}>Settings</button>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -518,7 +361,7 @@ function EmailSettings() {
         <label>Subject prefix<br />
           <input value={s.subject_prefix} onChange={(e) => setS({ ...s, subject_prefix: e.target.value })} />
         </label>
-        <button onClick={save} className="primary">Save Email Settings</button>
+        <button onClick={save}>Save Email Settings</button>
         {msg && <div>{msg}</div>}
       </div>
     </Section>
@@ -549,31 +392,7 @@ function LocationsAdmin() {
     await load();
   }
 
-  const [editingSku, setEditingSku] = useState<number | null>(null);
-const [editingLocIds, setEditingLocIds] = useState<number[]>([]);
-const [editingLabel, setEditingLabel] = useState<string>("");
-
-async function openLocations(p: any) {
-  const skuId = p.sku_id;
-  setEditingSku(skuId);
-  setEditingLabel(p.name);
-  const current = await api<Location[]>(`/api/skus/${skuId}/locations`);
-  setEditingLocIds(current.map((x) => x.id));
-}
-
-async function saveLocations() {
-  if (!editingSku) return;
-  const res = await fetch(`/api/skus/${editingSku}/locations`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ locationIds: editingLocIds }),
-  });
-  if (!res.ok) setMsg(await res.text());
-  else setMsg("Locations updated.");
-  setEditingSku(null);
-}
-
-async function del(id: number) {
+  async function del(id: number) {
     if (!confirm("Delete this location? (It must have no PAR/On‑Hand rows)")) return;
     const res = await fetch(`/api/locations/${id}`, { method: "DELETE" });
     if (!res.ok) setMsg(await res.text());
@@ -589,34 +408,28 @@ async function del(id: number) {
       {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
 
           {editingSku && (
-            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 16, background: "white" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 900 }}>Stocked Locations</div>
-                  <div className="muted">{editingLabel} — select all locations where this item can be stored / counted.</div>
+                  <div style={{ fontWeight: 900 }}>Stock locations</div>
+                  <div style={{ color: "var(--fs-muted)", fontSize: 13 }}>{editingName}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => setEditingSku(null)}>Cancel</button>
-                  <button className="primary" onClick={saveLocations}>Save Locations</button>
+                  <button className="primary" onClick={saveLocations}>Save</button>
                 </div>
               </div>
-
-              <div style={{ marginTop: 12 }} className="checklist">
+              <div style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
                 {locations.map((l) => (
-                  <label key={l.id} className="check">
-                    <input
-                      type="checkbox"
-                      checked={editingLocIds.includes(l.id)}
-                      onChange={(e) => {
-                        setEditingLocIds((prev) => e.target.checked ? [...prev, l.id] : prev.filter((x) => x !== l.id));
-                      }}
-                    />
+                  <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: 10, border: "1px solid var(--fs-border)", borderRadius: 12 }}>
+                    <input type="checkbox" checked={editingLocIds.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 18, height: 18 }} />
                     <span>{l.name}</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
+
       <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
         {items.map((l) => (
           <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center" }}>
@@ -671,34 +484,28 @@ function MaterialsAdmin() {
       {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
 
           {editingSku && (
-            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 16, background: "white" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 900 }}>Stocked Locations</div>
-                  <div className="muted">{editingLabel} — select all locations where this item can be stored / counted.</div>
+                  <div style={{ fontWeight: 900 }}>Stock locations</div>
+                  <div style={{ color: "var(--fs-muted)", fontSize: 13 }}>{editingName}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => setEditingSku(null)}>Cancel</button>
-                  <button className="primary" onClick={saveLocations}>Save Locations</button>
+                  <button className="primary" onClick={saveLocations}>Save</button>
                 </div>
               </div>
-
-              <div style={{ marginTop: 12 }} className="checklist">
+              <div style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
                 {locations.map((l) => (
-                  <label key={l.id} className="check">
-                    <input
-                      type="checkbox"
-                      checked={editingLocIds.includes(l.id)}
-                      onChange={(e) => {
-                        setEditingLocIds((prev) => e.target.checked ? [...prev, l.id] : prev.filter((x) => x !== l.id));
-                      }}
-                    />
+                  <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: 10, border: "1px solid var(--fs-border)", borderRadius: 12 }}>
+                    <input type="checkbox" checked={editingLocIds.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 18, height: 18 }} />
                     <span>{l.name}</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
+
       <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
         {items.map((m) => (
           <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
@@ -714,6 +521,9 @@ function MaterialsAdmin() {
 function ProductsAdmin() {
   const [materials, setMaterials] = useState<{ id: number; name: string }[]>([]);
       const [locations, setLocations] = useState<Location[]>([]);
+      const [editingSku, setEditingSku] = useState<number | null>(null);
+      const [editingName, setEditingName] = useState<string>("");
+      const [editingLocIds, setEditingLocIds] = useState<number[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [msg, setMsg] = useState("");
@@ -736,7 +546,31 @@ function ProductsAdmin() {
   useEffect(() => { load(); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [query]);
 
-  async function add() {
+  
+async function openLocations(p: any) {
+  setEditingSku(p.sku_id);
+  setEditingName(p.name);
+  const current = await api<Location[]>(`/api/skus/${p.sku_id}/locations`);
+  setEditingLocIds(current.map((x) => x.id));
+}
+
+async function saveLocations() {
+  if (!editingSku) return;
+  const res = await fetch(`/api/skus/${editingSku}/locations`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ locationIds: editingLocIds }),
+  });
+  if (!res.ok) setMsg(await res.text());
+  else setMsg("Locations updated.");
+  setEditingSku(null);
+}
+
+function toggleLoc(id: number) {
+  setEditingLocIds((prev) => prev.includes(id) ? prev.filter(x => x!==id) : [...prev, id]);
+}
+
+async function add() {
     setMsg("");
     if (!newMt) return;
     const res = await fetch("/api/products", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: newName, material_type_id: newMt, sku_code: newSku || null }) });
@@ -785,34 +619,28 @@ function ProductsAdmin() {
       {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
 
           {editingSku && (
-            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 16, background: "white" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 900 }}>Stocked Locations</div>
-                  <div className="muted">{editingLabel} — select all locations where this item can be stored / counted.</div>
+                  <div style={{ fontWeight: 900 }}>Stock locations</div>
+                  <div style={{ color: "var(--fs-muted)", fontSize: 13 }}>{editingName}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => setEditingSku(null)}>Cancel</button>
-                  <button className="primary" onClick={saveLocations}>Save Locations</button>
+                  <button className="primary" onClick={saveLocations}>Save</button>
                 </div>
               </div>
-
-              <div style={{ marginTop: 12 }} className="checklist">
+              <div style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
                 {locations.map((l) => (
-                  <label key={l.id} className="check">
-                    <input
-                      type="checkbox"
-                      checked={editingLocIds.includes(l.id)}
-                      onChange={(e) => {
-                        setEditingLocIds((prev) => e.target.checked ? [...prev, l.id] : prev.filter((x) => x !== l.id));
-                      }}
-                    />
+                  <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: 10, border: "1px solid var(--fs-border)", borderRadius: 12 }}>
+                    <input type="checkbox" checked={editingLocIds.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 18, height: 18 }} />
                     <span>{l.name}</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
+
 
       <div style={{ marginTop: 12, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -917,34 +745,28 @@ function GlobalParAdmin() {
       {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
 
           {editingSku && (
-            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 16, background: "white" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 900 }}>Stocked Locations</div>
-                  <div className="muted">{editingLabel} — select all locations where this item can be stored / counted.</div>
+                  <div style={{ fontWeight: 900 }}>Stock locations</div>
+                  <div style={{ color: "var(--fs-muted)", fontSize: 13 }}>{editingName}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => setEditingSku(null)}>Cancel</button>
-                  <button className="primary" onClick={saveLocations}>Save Locations</button>
+                  <button className="primary" onClick={saveLocations}>Save</button>
                 </div>
               </div>
-
-              <div style={{ marginTop: 12 }} className="checklist">
+              <div style={{ marginTop: 10, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
                 {locations.map((l) => (
-                  <label key={l.id} className="check">
-                    <input
-                      type="checkbox"
-                      checked={editingLocIds.includes(l.id)}
-                      onChange={(e) => {
-                        setEditingLocIds((prev) => e.target.checked ? [...prev, l.id] : prev.filter((x) => x !== l.id));
-                      }}
-                    />
+                  <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: 10, border: "1px solid var(--fs-border)", borderRadius: 12 }}>
+                    <input type="checkbox" checked={editingLocIds.includes(l.id)} onChange={() => toggleLoc(l.id)} style={{ width: 18, height: 18 }} />
                     <span>{l.name}</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
+
       {loading && <div style={{ marginTop: 10 }}>Loading…</div>}
 
       <div style={{ marginTop: 12, overflowX: "auto" }}>

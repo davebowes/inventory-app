@@ -269,7 +269,6 @@ app.put("/api/skus/:id/par", async (c) => {
   return c.json({ ok: true });
 });
 
-
 app.get("/api/skus/:id/locations", async (c) => {
   const id = Number(c.req.param("id"));
   if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
@@ -289,9 +288,7 @@ app.put("/api/skus/:id/locations", async (c) => {
   if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
   const locs = Array.isArray(body.locationIds) ? body.locationIds.map(Number).filter(Boolean) : [];
 
-  // Replace mapping (simple + predictable)
   await c.env.DB.prepare("DELETE FROM sku_locations WHERE sku_id=?").bind(id).run();
-
   if (locs.length) {
     const stmt = c.env.DB.prepare("INSERT INTO sku_locations (sku_id, location_id) VALUES (?, ?)");
     await c.env.DB.batch(locs.map((lid) => stmt.bind(id, lid)));
