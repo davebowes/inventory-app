@@ -158,40 +158,6 @@ function OnHand() {
       </div>
 
       {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
-
-          
-{editingSku && (
-  <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-      <div>
-        <div style={{ fontWeight: 900 }}>Stock locations</div>
-        <div style={{ color: "var(--fs-muted)", fontSize: 13 }}>{editingName}</div>
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => setEditingSku(null)}>Cancel</button>
-        <button className="primary" onClick={saveLocations}>Save</button>
-      </div>
-    </div>
-
-    <div style={{ marginTop: 10, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-      {locations.map((l) => (
-        <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 12px", border: "1px solid var(--fs-border)", borderRadius: 12, background: "white" }}>
-          <input
-            type="checkbox"
-            checked={editingLocIds.includes(l.id)}
-            onChange={() => toggleLoc(l.id)}
-            style={{ width: 18, height: 18 }}
-          />
-          <span style={{ fontWeight: 700 }}>{l.name}</span>
-        </label>
-      ))}
-    </div>
-
-    <div style={{ marginTop: 10 }} className="muted">
-      Tip: assign a product to every location where you might count it. Reorder still uses the TOTAL on‑hand across all locations.
-    </div>
-  </div>
-)}
                   <button className="primary" onClick={saveLocations}>Save</button>
                 </div>
               </div>
