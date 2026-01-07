@@ -21,6 +21,50 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
   };
 
   /* =======================
+   MATERIAL TYPES
+======================= */
+if (path === "/material-types" && method === "GET") {
+  const { results } = await env.DB
+    .prepare(`SELECT id, name FROM material_types ORDER BY name`)
+    .all();
+  return json(results);
+}
+
+if (path === "/material-types" && method === "POST") {
+  const body = await readJson();
+  const name = String(body?.name ?? "").trim();
+  if (!name) return json({ error: "Name required" }, 400);
+
+  await env.DB.prepare(`INSERT INTO material_types (name) VALUES (?)`).bind(name).run();
+  return json({ ok: true });
+}
+
+if (path.startsWith("/material-types/") && method === "DELETE") {
+  const id = Number(path.split("/")[2]);
+  if (!id) return json({ error: "Invalid id" }, 400);
+
+  const used = await env.DB
+    .prepare(
+      `SELECT COUNT(*) as c
+       FROM products
+       WHERE material_type = (SELECT name FROM material_types WHERE id=?)`
+    )
+    .bind(id)
+    .first<any>();
+
+  if ((used?.c ?? 0) > 0) {
+    return json(
+      { error: "That type is in use by products. Change those products first." },
+      400
+    );
+  }
+
+  await env.DB.prepare(`DELETE FROM material_types WHERE id=?`).bind(id).run();
+  return json({ ok: true });
+}
+
+  
+  /* =======================
      PRODUCTS (GET)
      includes total_on_hand
   ======================= */
