@@ -21,6 +21,15 @@ type ReorderRow = {
   order_qty: number;
 };
 
+type Product = {
+  id: number;
+  name: string;
+  material_type: string;
+  sku: string | null;
+  par_qty: number;
+  total_on_hand?: number;
+};
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { "content-type": "application/json" },
@@ -369,11 +378,378 @@ function Settings() {
       </div>
 
       <div style={{ marginTop: 12 }}>
-        {tab === "products" && <ProductsAdmin />}
-        {tab === "locations" && <LocationsAdmin />}
+        {tab === "products" ? <ProductsAdmin /> : <LocationsAdmin />}
       </div>
     </Card>
   );
+}
+
+function LocationsAdmin() {
+  const [rows, setRows] = useState<Location[]>([]);
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    setMsg("");
+    const data = await api<Location[]>("/locations");
+    setRows(data);
+  }
+
+  useEffect(() => {
+    load().catch((e) => setMsg(String(e.message || e)));
+  }, []);
+
+  async function add() {
+    const n = name.trim();
+    if (!n) return;
+
+    await api("/locations", { method: "POST", body: JSON.stringify({ name: n }) });
+    setName("");
+    await load();
+    setMsg("Location added.");
+  }
+
+  async function rename(id: number, newName: string) {
+    const n = newName.trim();
+    if (!n) return;
+
+    await api(`/locations/${id}`, { method: "PUT", body: JSON.stringify({ name: n }) });
+    await load();
+    setMsg("Updated.");
+  }
+
+  async function del(id: number) {
+    if (!confirm("Delete this location?")) return;
+    await api(`/locations/${id}`, { method: "DELETE" });
+    await load();
+    setMsg("Deleted.");
+  }
+
+  return (
+    <>
+      <div style={styles.grid2}>
+        <label style={styles.label}>
+          New Location
+          <input value={name} onChange={(e) => setName(e.target.value)} style={styles.input} />
+        </label>
+        <div style={{ display: "flex", alignItems: "end" }}>
+          <button style={styles.btnPrimary} onClick={add}>
+            Add Location
+          </button>
+        </div>
+      </div>
+
+      {msg && <div style={styles.msg}>{msg}</div>}
+
+      <div style={{ overflowX: "auto", marginTop: 10 }}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Location</th>
+              <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.id}>
+                <td style={styles.td}>
+                  <input
+                    defaultValue={l.name}
+                    style={styles.input}
+                    onBlur={(e) => rename(l.id, e.target.value)}
+                  />
+                </td>
+                <td style={{ ...styles.td, textAlign: "right" }}>
+                  <button style={styles.btn} onClick={() => del(l.id)}>
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td style={styles.tdMuted} colSpan={2}>
+                  No locations yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function ProductsAdmin() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [msg, setMsg] = useState("");
+
+  const [newRow, setNewRow] = useState({
+    name: "",
+    material_type: "",
+    sku: "",
+    par_qty: 0,
+  });
+
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingLocIds, setEditingLocIds] = useState<number[]>([]);
+
+  async function load() {
+    setMsg("");
+    const [p, l] = await Promise.all([
+      api<Product[]>("/products"),
+      api<Location[]>("/locations"),
+    ]);
+    setProducts(p);
+    setLocations(l);
+  }
+
+  useEffect(() => {
+    load().catch((e) => setMsg(String(e.message || e)));
+  }, []);
+
+  async function addProduct() {
+    if (!newRow.name.trim() || !newRow.material_type.trim()) {
+      setMsg("Product name and material type are required.");
+      return;
+    }
+
+    await api("/products", {
+      method: "POST",
+      body: JSON.stringify({
+        name: newRow.name.trim(),
+        material_type: newRow.material_type.trim(),
+        sku: newRow.sku.trim() || null,
+        par_qty: Math.max(0, Math.floor(Number(newRow.par_qty || 0))),
+      }),
+    });
+
+    setNewRow({ name: "", material_type: "", sku: "", par_qty: 0 });
+    await load();
+    setMsg("Product added.");
+  }
+
+  async function saveProduct(p: Product) {
+    await api(`/products/${p.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: String(p.name).trim(),
+        material_type: String(p.material_type).trim(),
+        sku: String(p.sku ?? "").trim() || null,
+        par_qty: Math.max(0, Math.floor(Number(p.par_qty || 0))),
+      }),
+    });
+
+    await load();
+    setMsg("Saved.");
+  }
+
+  async function deleteProduct(id: number) {
+    if (!confirm("Delete this product?")) return;
+    await api(`/products/${id}`, { method: "DELETE" });
+    await load();
+    setMsg("Deleted.");
+  }
+
+  async function openLocations(p: Product) {
+    setEditingProduct(p);
+    const assigned = await api<Location[]>(`/products/${p.id}/locations`);
+    setEditingLocIds(assigned.map((x) => x.id));
+  }
+
+  function toggleLoc(id: number) {
+    setEditingLocIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function saveLocations() {
+    if (!editingProduct) return;
+
+    await api(`/products/${editingProduct.id}/locations`, {
+      method: "PUT",
+      body: JSON.stringify({ locationIds: editingLocIds }),
+    });
+
+    setEditingProduct(null);
+    await load();
+    setMsg("Locations updated.");
+  }
+
+  return (
+    <>
+      <div style={styles.grid2}>
+        <label style={styles.label}>
+          Product Name
+          <input
+            value={newRow.name}
+            onChange={(e) => setNewRow({ ...newRow, name: e.target.value })}
+            style={styles.input}
+          />
+        </label>
+
+        <label style={styles.label}>
+          Material Type
+          <input
+            value={newRow.material_type}
+            onChange={(e) => setNewRow({ ...newRow, material_type: e.target.value })}
+            style={styles.input}
+          />
+        </label>
+
+        <label style={styles.label}>
+          SKU (optional)
+          <input
+            value={newRow.sku}
+            onChange={(e) => setNewRow({ ...newRow, sku: e.target.value })}
+            style={styles.input}
+          />
+        </label>
+
+        <label style={styles.label}>
+          Global PAR (whole units)
+          <input
+            value={String(newRow.par_qty)}
+            onChange={(e) => setNewRow({ ...newRow, par_qty: Number(e.target.value || 0) })}
+            style={styles.input}
+            inputMode="numeric"
+          />
+        </label>
+
+        <div style={{ display: "flex", alignItems: "end" }}>
+          <button style={styles.btnPrimary} onClick={addProduct}>
+            Add Product
+          </button>
+        </div>
+      </div>
+
+      {msg && <div style={styles.msg}>{msg}</div>}
+
+      {editingProduct && (
+        <div style={{ marginTop: 12, padding: 12, border: "1px solid #e5e7eb", borderRadius: 14 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>
+            Stocked Locations — {editingProduct.name}
+          </div>
+
+          <div style={{ display: "grid", gap: 8 }}>
+            {locations.map((l) => (
+              <label key={l.id} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={editingLocIds.includes(l.id)}
+                  onChange={() => toggleLoc(l.id)}
+                />
+                {l.name}
+              </label>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+            <button style={styles.btn} onClick={() => setEditingProduct(null)}>
+              Cancel
+            </button>
+            <button style={styles.btnPrimary} onClick={saveLocations}>
+              Save Locations
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ overflowX: "auto", marginTop: 12 }}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Material</th>
+              <th style={styles.th}>Product</th>
+              <th style={styles.th}>SKU</th>
+              <th style={{ ...styles.th, textAlign: "right" }}>PAR</th>
+              <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p) => (
+              <tr key={p.id}>
+                <td style={styles.tdMuted}>
+                  <input
+                    value={p.material_type}
+                    style={styles.input}
+                    onChange={(e) =>
+                      setProducts((prev) =>
+                        prev.map((x) => (x.id === p.id ? { ...x, material_type: e.target.value } : x))
+                      )
+                    }
+                  />
+                </td>
+
+                <td style={styles.td}>
+                  <input
+                    value={p.name}
+                    style={styles.input}
+                    onChange={(e) =>
+                      setProducts((prev) =>
+                        prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x))
+                      )
+                    }
+                  />
+                </td>
+
+                <td style={styles.tdMuted}>
+                  <input
+                    value={p.sku ?? ""}
+                    style={styles.input}
+                    onChange={(e) =>
+                      setProducts((prev) =>
+                        prev.map((x) => (x.id === p.id ? { ...x, sku: e.target.value } : x))
+                      )
+                    }
+                  />
+                </td>
+
+                <td style={{ ...styles.td, textAlign: "right" }}>
+                  <input
+                    value={String(p.par_qty ?? 0)}
+                    style={{ ...styles.input, width: 110, textAlign: "right" }}
+                    inputMode="numeric"
+                    onChange={(e) =>
+                      setProducts((prev) =>
+                        prev.map((x) =>
+                          x.id === p.id ? { ...x, par_qty: Number(e.target.value || 0) } : x
+                        )
+                      )
+                    }
+                  />
+                </td>
+
+                <td style={{ ...styles.td, textAlign: "right" }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+                    <button style={styles.btn} onClick={() => openLocations(p)}>
+                      Locations…
+                    </button>
+                    <button style={styles.btnPrimary} onClick={() => saveProduct(p)}>
+                      Save
+                    </button>
+                    <button style={styles.btn} onClick={() => deleteProduct(p.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+
+            {products.length === 0 && (
+              <tr>
+                <td style={styles.tdMuted} colSpan={5}>
+                  No products yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+
 }
 function LocationsAdmin() {
   const [rows, setRows] = useState<Location[]>([]);
@@ -468,6 +844,8 @@ function LocationsAdmin() {
     </>
   );
 }
+
+
 
 function ProductsAdmin() {
   const [products, setProducts] = useState<any[]>([]);
