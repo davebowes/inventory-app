@@ -1,0 +1,17 @@
+# $schema = "node_modules/wrangler/config-schema.json"
+name = "inventory-app"
+compatibility_date = "2025-11-11"
+
+# IMPORTANT:
+# After you create your D1 database in Cloudflare, fill in database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "INVENTORY_DB"
+database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+# Used as a fallback; Settings screen can override from_name/from_email in DB.
+DEFAULT_FROM_NAME = "Inventory"
+DEFAULT_FROM_EMAIL = "noreply@example.com"
+SUBJECT_PREFIX = "Inventory Order"
