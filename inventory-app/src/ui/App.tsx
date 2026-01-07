@@ -23,7 +23,16 @@ export default function App() {
   const [tab, setTab] = useState<"onhand" | "reorder" | "settings">("onhand");
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 16, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 20, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial" }}>
+      <style>{`/* UI_STYLES */
+        :root { --fs-red:#E31837; --fs-dark:#111827; --fs-bg:#f7f7f7; --fs-card:#ffffff; }
+        h1 { font-size: 28px; }
+        button { padding: 10px 12px; border-radius: 10px; border: 1px solid #d9d9d9; background: var(--fs-card); cursor: pointer; }
+        button:hover { background: #f6f6f6; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        input, select { padding: 10px 12px; border-radius: 10px; border: 1px solid #d9d9d9; }
+        table th { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.04em; }
+      `}</style>
       <h1 style={{ margin: "6px 0 14px" }}>Inventory App</h1>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -245,12 +254,31 @@ function Reorder() {
 }
 
 function SettingsView() {
+  const [tab, setTab] = useState<"email" | "locations" | "materials" | "products" | "par">("email");
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={() => setTab("email")}>Email</button>
+        <button onClick={() => setTab("locations")}>Locations</button>
+        <button onClick={() => setTab("materials")}>Material Types</button>
+        <button onClick={() => setTab("products")}>Products / SKUs</button>
+        <button onClick={() => setTab("par")}>Global PAR</button>
+      </div>
+
+      {tab === "email" && <EmailSettings />}
+      {tab === "locations" && <LocationsAdmin />}
+      {tab === "materials" && <MaterialsAdmin />}
+      {tab === "products" && <ProductsAdmin />}
+      {tab === "par" && <GlobalParAdmin />}
+    </div>
+  );
+}
+
+function EmailSettings() {
   const [s, setS] = useState<Settings | null>(null);
   const [msg, setMsg] = useState("");
 
-  useEffect(() => {
-    api<Settings>("/api/settings").then(setS);
-  }, []);
+  useEffect(() => { api<Settings>("/api/settings").then(setS); }, []);
 
   async function save() {
     if (!s) return;
@@ -259,10 +287,10 @@ function SettingsView() {
     setMsg("Saved.");
   }
 
-  if (!s) return <Section title="Settings">Loading…</Section>;
+  if (!s) return <Section title="Settings (email defaults)">Loading…</Section>;
 
   return (
-    <Section title="Settings (email defaults)">
+    <Section title="Email Settings">
       <div style={{ display: "grid", gap: 10 }}>
         <label>Default TO emails<br />
           <input value={s.default_to_emails} onChange={(e) => setS({ ...s, default_to_emails: e.target.value })} placeholder="purchasing@company.com" />
@@ -270,17 +298,326 @@ function SettingsView() {
         <label>Default CC emails (optional)<br />
           <input value={s.default_cc_emails} onChange={(e) => setS({ ...s, default_cc_emails: e.target.value })} placeholder="manager@company.com" />
         </label>
-        <label>From name<br />
-          <input value={s.from_name} onChange={(e) => setS({ ...s, from_name: e.target.value })} />
-        </label>
-        <label>From email<br />
-          <input value={s.from_email} onChange={(e) => setS({ ...s, from_email: e.target.value })} placeholder="noreply@yourdomain.com" />
-        </label>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+          <label>From name<br />
+            <input value={s.from_name} onChange={(e) => setS({ ...s, from_name: e.target.value })} />
+          </label>
+          <label>From email<br />
+            <input value={s.from_email} onChange={(e) => setS({ ...s, from_email: e.target.value })} placeholder="noreply@yourdomain.com" />
+          </label>
+        </div>
         <label>Subject prefix<br />
           <input value={s.subject_prefix} onChange={(e) => setS({ ...s, subject_prefix: e.target.value })} />
         </label>
-        <button onClick={save}>Save Settings</button>
+        <button onClick={save}>Save Email Settings</button>
         {msg && <div>{msg}</div>}
+      </div>
+    </Section>
+  );
+}
+
+function LocationsAdmin() {
+  const [items, setItems] = useState<Location[]>([]);
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    setMsg("");
+    const d = await api<Location[]>("/api/locations");
+    setItems(d);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function add() {
+    setMsg("");
+    await api("/api/locations", { method: "POST", body: JSON.stringify({ name }) });
+    setName("");
+    await load();
+  }
+
+  async function rename(id: number, newName: string) {
+    await api(`/api/locations/${id}`, { method: "PUT", body: JSON.stringify({ name: newName }) });
+    await load();
+  }
+
+  async function del(id: number) {
+    if (!confirm("Delete this location? (It must have no PAR/On‑Hand rows)")) return;
+    const res = await fetch(`/api/locations/${id}`, { method: "DELETE" });
+    if (!res.ok) setMsg(await res.text());
+    await load();
+  }
+
+  return (
+    <Section title="Locations">
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New location name" />
+        <button onClick={add} disabled={!name.trim()}>Add</button>
+      </div>
+      {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
+      <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+        {items.map((l) => (
+          <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center" }}>
+            <input defaultValue={l.name} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== l.name) rename(l.id, v); }} />
+            <button onClick={() => del(l.id)}>Delete</button>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+function MaterialsAdmin() {
+  const [items, setItems] = useState<{ id: number; name: string }[]>([]);
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    setMsg("");
+    const d = await api<typeof items>("/api/material-types");
+    setItems(d);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function add() {
+    setMsg("");
+    const res = await fetch("/api/material-types", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
+    if (!res.ok) setMsg(await res.text());
+    setName("");
+    await load();
+  }
+
+  async function rename(id: number, newName: string) {
+    const res = await fetch(`/api/material-types/${id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: newName }) });
+    if (!res.ok) setMsg(await res.text());
+    await load();
+  }
+
+  async function del(id: number) {
+    if (!confirm("Delete this material type? (It must not be used by products)")) return;
+    const res = await fetch(`/api/material-types/${id}`, { method: "DELETE" });
+    if (!res.ok) setMsg(await res.text());
+    await load();
+  }
+
+  return (
+    <Section title="Material Types">
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New material type" />
+        <button onClick={add} disabled={!name.trim()}>Add</button>
+      </div>
+      {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
+      <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+        {items.map((m) => (
+          <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+            <input defaultValue={m.name} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.name) rename(m.id, v); }} />
+            <button onClick={() => del(m.id)}>Delete</button>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+function ProductsAdmin() {
+  const [materials, setMaterials] = useState<{ id: number; name: string }[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [query, setQuery] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const [newName, setNewName] = useState("");
+  const [newSku, setNewSku] = useState("");
+  const [newMt, setNewMt] = useState<number | null>(null);
+
+  async function load() {
+    setMsg("");
+    const mts = await api<typeof materials>("/api/material-types");
+    setMaterials(mts);
+    setNewMt(mts[0]?.id ?? null);
+    const data = await api<any[]>(`/api/products?query=${encodeURIComponent(query)}`);
+    setItems(data);
+  }
+
+  useEffect(() => { load(); }, []);
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [query]);
+
+  async function add() {
+    setMsg("");
+    if (!newMt) return;
+    const res = await fetch("/api/products", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: newName, material_type_id: newMt, sku_code: newSku || null }) });
+    if (!res.ok) setMsg(await res.text());
+    setNewName(""); setNewSku("");
+    await load();
+  }
+
+  async function saveRow(p: any) {
+    setMsg("");
+    const res = await fetch(`/api/products/${p.id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: p.name, material_type_id: p.material_type_id, sku_code: p.sku_code || null }) });
+    if (!res.ok) setMsg(await res.text());
+    await load();
+  }
+
+  async function del(id: number) {
+    if (!confirm("Deactivate this product? (It will stop showing in the app)")) return;
+    await api(`/api/products/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  return (
+    <Section title="Products / SKUs">
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", alignItems: "end" }}>
+        <label>Search<br />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter by product or SKU…" />
+        </label>
+
+        <div />
+      </div>
+
+      <div style={{ marginTop: 12, padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>Add new</div>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 1fr auto", alignItems: "end" }}>
+          <label>Product<br /><input value={newName} onChange={(e) => setNewName(e.target.value)} /></label>
+          <label>SKU (optional)<br /><input value={newSku} onChange={(e) => setNewSku(e.target.value)} /></label>
+          <label>Material Type<br />
+            <select value={newMt ?? ""} onChange={(e) => setNewMt(Number(e.target.value))}>
+              {materials.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </label>
+          <button onClick={add} disabled={!newName.trim() || !newMt}>Add</button>
+        </div>
+      </div>
+
+      {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
+
+      <div style={{ marginTop: 12, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Product</th>
+              <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>SKU</th>
+              <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Material Type</th>
+              <th align="right" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((p) => (
+              <tr key={p.id}>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>
+                  <input value={p.name} onChange={(e) => setItems(prev => prev.map(x => x.id===p.id ? { ...x, name: e.target.value } : x))} style={{ width: "100%" }} />
+                </td>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>
+                  <input value={p.sku_code ?? ""} onChange={(e) => setItems(prev => prev.map(x => x.id===p.id ? { ...x, sku_code: e.target.value } : x))} style={{ width: "100%" }} />
+                </td>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>
+                  <select value={p.material_type_id} onChange={(e) => setItems(prev => prev.map(x => x.id===p.id ? { ...x, material_type_id: Number(e.target.value) } : x))} style={{ width: "100%" }}>
+                    {materials.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </td>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }} align="right">
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                    <button onClick={() => saveRow(p)}>Save</button>
+                    <button onClick={() => del(p.id)}>Deactivate</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
+
+
+
+function GlobalParAdmin() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [filter, setFilter] = useState("");
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setMsg("");
+    try {
+      const data = await api<any[]>(`/api/reorder`);
+      // /api/reorder returns par + total_on_hand as strings; but we want editable par.
+      // We'll re-fetch full products list instead with material types.
+      const products = await api<any[]>(`/api/products?query=`);
+      // We'll build a simple list from /api/reorder for global par editing.
+      setRows(data.map((d) => ({
+        sku_id: d.sku_id,
+        product: d.product,
+        sku: d.sku,
+        material_type: d.material_type,
+        par: d.par, // string "0.0"
+      })));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const shown = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(r => r.product.toLowerCase().includes(q) || (r.sku ? r.sku.toLowerCase().includes(q) : false) || (r.material_type ? r.material_type.toLowerCase().includes(q) : false));
+  }, [rows, filter]);
+
+  async function saveRow(r: any) {
+    setMsg("");
+    // Update via product endpoint (MVP updates first sku row); we'll call /api/products/:id isn't available here.
+    // Instead, update via a dedicated endpoint would be cleaner; for now, use a lightweight endpoint on skus.
+    const resp = await fetch(`/api/skus/${r.sku_id}/par`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ par: r.par }),
+    });
+    if (!resp.ok) setMsg(await resp.text());
+    else setMsg("Saved.");
+  }
+
+  return (
+    <Section title="Global PAR (one PAR per product)">
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", alignItems: "center" }}>
+        <label>Filter (optional)<br />
+          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Type product, SKU, or material…" style={{ width: "100%" }} />
+        </label>
+        <div />
+      </div>
+
+      {msg && <div style={{ marginTop: 10 }}>{msg}</div>}
+      {loading && <div style={{ marginTop: 10 }}>Loading…</div>}
+
+      <div style={{ marginTop: 12, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Material</th>
+              <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Product</th>
+              <th align="left" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>SKU</th>
+              <th align="right" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Global PAR</th>
+              <th align="right" style={{ borderBottom: "1px solid #eee", padding: "8px 6px" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => (
+              <tr key={r.sku_id}>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>{r.material_type}</td>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>{r.product}</td>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "8px 6px" }}>{r.sku ?? ""}</td>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "6px 6px" }} align="right">
+                  <input value={r.par} onChange={(e) => setRows(prev => prev.map(x => x.sku_id===r.sku_id ? { ...x, par: e.target.value } : x))}
+                    style={{ width: 90, textAlign: "right" }} inputMode="decimal" />
+                </td>
+                <td style={{ borderBottom: "1px solid #f3f3f3", padding: "6px 6px" }} align="right">
+                  <button onClick={() => saveRow(r)}>Save</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </Section>
   );

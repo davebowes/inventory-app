@@ -47,7 +47,7 @@ async function buildReorder(env: Bindings) {
       mt.name as materialType,
       p.name as product,
       s.sku_code as sku,
-      pl.par_qty_tenths as parTenths,
+      s.par_qty_tenths as parTenths,
       COALESCE(oh.on_hand_qty_tenths, 0) as onHandTenths
     FROM par_levels pl
     JOIN skus s ON s.id = pl.sku_id
@@ -145,11 +145,6 @@ function renderHtml(dateStr: string, sections: { materialType: string; lines: { 
 </html>`;
 }
 
-app.get("/api/locations", async (c) => {
-  const r = await c.env.DB.prepare("SELECT id, name FROM locations ORDER BY name").all();
-  return c.json(r.results);
-});
-
 app.get("/api/search", async (c) => {
   const q = (c.req.query("query") ?? "").trim();
   if (!q) return c.json([]);
@@ -182,22 +177,22 @@ app.post("/api/onhand", async (c) => {
   return c.json({ ok: true });
 });
 
+// Items for a single location (used for counting). Includes global PAR and on-hand for that location.
 app.get("/api/location-items", async (c) => {
-  const locationId = Number(c.req.query("locationId") ?? "0");
-  if (!locationId) return c.json({ error: "locationId required" }, 400);
+  const locationId = Number(c.req.query("locationId"));
+  if (!locationId) return c.json({ ok: false, message: "locationId is required" }, 400);
 
   const r = await c.env.DB.prepare(`
     SELECT
       s.id as sku_id,
       p.name as product,
       s.sku_code as sku,
-      pl.par_qty_tenths as par_tenths,
-      COALESCE(oh.on_hand_qty_tenths, 0) as on_hand_tenths
-    FROM par_levels pl
-    JOIN skus s ON s.id = pl.sku_id
+      COALESCE(s.par_qty_tenths, 0) as par_tenths,
+      COALESCE(SUM(oh.qty_tenths), 0) as on_hand_tenths
+    FROM skus s
     JOIN products p ON p.id = s.product_id
-    LEFT JOIN on_hand oh ON oh.sku_id = pl.sku_id AND oh.location_id = pl.location_id
-    WHERE pl.location_id = ? AND p.is_active=1 AND s.is_active=1
+    LEFT JOIN on_hand oh ON oh.sku_id = s.id
+    WHERE p.is_active = 1 AND s.is_active = 1
     ORDER BY p.name
   `).bind(locationId).all();
 
@@ -260,6 +255,182 @@ app.put("/api/settings", async (c) => {
   `).bind(body.default_to_emails, body.default_cc_emails, body.from_name, body.from_email, body.subject_prefix).run();
 
   return c.json({ ok: true });
+});
+
+
+app.put("/api/skus/:id/par", async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ par: string | number }>();
+  if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
+  const parNum = Number(body.par);
+  if (Number.isNaN(parNum) || parNum < 0) return c.json({ ok: false, message: "PAR must be a number >= 0" }, 400);
+  const parTenths = toTenths(parNum);
+  await c.env.DB.prepare("UPDATE skus SET par_qty_tenths=? WHERE id=?").bind(parTenths, id).run();
+  return c.json({ ok: true });
+});
+
+// ----- Admin / Settings CRUD -----
+
+app.get("/api/material-types", async (c) => {
+  const r = await c.env.DB.prepare("SELECT id, name FROM material_types ORDER BY name").all();
+  return c.json(r.results);
+});
+
+app.post("/api/material-types", async (c) => {
+  const body = await c.req.json<{ name: string }>();
+  const name = (body.name ?? "").trim();
+  if (!name) return c.json({ ok: false, message: "Name required" }, 400);
+  await c.env.DB.prepare("INSERT INTO material_types (name) VALUES (?)").bind(name).run();
+  return c.json({ ok: true });
+});
+
+app.put("/api/material-types/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ name: string }>();
+  const name = (body.name ?? "").trim();
+  if (!id || !name) return c.json({ ok: false, message: "Invalid" }, 400);
+  await c.env.DB.prepare("UPDATE material_types SET name=? WHERE id=?").bind(name, id).run();
+  return c.json({ ok: true });
+});
+
+app.delete("/api/material-types/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
+  // Prevent delete if used
+  const used = await c.env.DB.prepare("SELECT COUNT(*) as c FROM products WHERE material_type_id=?").bind(id).first();
+  if (Number((used as any)?.c ?? 0) > 0) return c.json({ ok: false, message: "Cannot delete: in use by products" }, 400);
+  await c.env.DB.prepare("DELETE FROM material_types WHERE id=?").bind(id).run();
+  return c.json({ ok: true });
+});
+
+app.get("/api/locations", async (c) => {
+  const r = await c.env.DB.prepare("SELECT id, name FROM locations ORDER BY name").all();
+  return c.json(r.results);
+});
+
+app.post("/api/locations", async (c) => {
+  const body = await c.req.json<{ name: string }>();
+  const name = (body.name ?? "").trim();
+  if (!name) return c.json({ ok: false, message: "Name required" }, 400);
+  await c.env.DB.prepare("INSERT INTO locations (name) VALUES (?)").bind(name).run();
+  return c.json({ ok: true });
+});
+
+app.put("/api/locations/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ name: string }>();
+  const name = (body.name ?? "").trim();
+  if (!id || !name) return c.json({ ok: false, message: "Invalid" }, 400);
+  await c.env.DB.prepare("UPDATE locations SET name=? WHERE id=?").bind(name, id).run();
+  return c.json({ ok: true });
+});
+
+app.delete("/api/locations/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
+  // Prevent delete if used by par or on_hand
+  const used1 = await c.env.DB.prepare("SELECT COUNT(*) as c FROM par_levels WHERE location_id=?").bind(id).first();
+  const used2 = await c.env.DB.prepare("SELECT COUNT(*) as c FROM on_hand WHERE location_id=?").bind(id).first();
+  if (Number((used1 as any)?.c ?? 0) > 0 || Number((used2 as any)?.c ?? 0) > 0) {
+    return c.json({ ok: false, message: "Cannot delete: location has PAR or On-Hand rows" }, 400);
+  }
+  await c.env.DB.prepare("DELETE FROM locations WHERE id=?").bind(id).run();
+  return c.json({ ok: true });
+});
+
+app.get("/api/products", async (c) => {
+  const q = (c.req.query("query") ?? "").trim();
+  const like = `%${q}%`;
+  const stmt = q
+    ? c.env.DB.prepare(`
+        SELECT p.id, p.name, mt.id as material_type_id, mt.name as material_type, s.id as sku_id, s.sku_code
+        FROM products p
+        JOIN material_types mt ON mt.id=p.material_type_id
+        LEFT JOIN skus s ON s.product_id=p.id
+        WHERE p.is_active=1 AND (p.name LIKE ? OR s.sku_code LIKE ?)
+        ORDER BY p.name
+        LIMIT 200
+      `).bind(like, like)
+    : c.env.DB.prepare(`
+        SELECT p.id, p.name, mt.id as material_type_id, mt.name as material_type, s.id as sku_id, s.sku_code
+        FROM products p
+        JOIN material_types mt ON mt.id=p.material_type_id
+        LEFT JOIN skus s ON s.product_id=p.id
+        WHERE p.is_active=1
+        ORDER BY p.name
+        LIMIT 200
+      `);
+  const r = await stmt.all();
+  return c.json(r.results);
+});
+
+app.post("/api/products", async (c) => {
+  const body = await c.req.json<{ name: string; material_type_id: number; sku_code?: string | null }>();
+  const name = (body.name ?? "").trim();
+  const mt = Number(body.material_type_id);
+  const sku = (body.sku_code ?? "").toString().trim() || null;
+  if (!name || !mt) return c.json({ ok: false, message: "Name + material type required" }, 400);
+
+  const p = await c.env.DB.prepare("INSERT INTO products (name, material_type_id, is_active) VALUES (?, ?, 1)").bind(name, mt).run();
+  const pid = Number(p.meta.last_row_id);
+
+  await c.env.DB.prepare("INSERT INTO skus (product_id, sku_code, unit_name, is_active) VALUES (?, ?, NULL, 1)")
+    .bind(pid, sku).run();
+
+  return c.json({ ok: true, productId: pid });
+});
+
+app.put("/api/products/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ name: string; material_type_id: number; sku_code?: string | null }>();
+  const name = (body.name ?? "").trim();
+  const mt = Number(body.material_type_id);
+  const sku = (body.sku_code ?? "").toString().trim() || null;
+  if (!id || !name || !mt) return c.json({ ok: false, message: "Invalid" }, 400);
+
+  await c.env.DB.prepare("UPDATE products SET name=?, material_type_id=? WHERE id=?").bind(name, mt, id).run();
+  // Update the first SKU row (this MVP keeps one sku row per product)
+  const s = await c.env.DB.prepare("SELECT id FROM skus WHERE product_id=? ORDER BY id LIMIT 1").bind(id).first();
+  if (s?.id) {
+    await c.env.DB.prepare("UPDATE skus SET sku_code=? WHERE id=?").bind(sku, Number((s as any).id)).run();
+  } else {
+    await c.env.DB.prepare("INSERT INTO skus (product_id, sku_code, unit_name, is_active) VALUES (?, ?, NULL, 1)")
+      .bind(id, sku).run();
+  }
+
+  return c.json({ ok: true });
+});
+
+app.delete("/api/products/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!id) return c.json({ ok: false, message: "Invalid" }, 400);
+  // soft delete
+  await c.env.DB.prepare("UPDATE products SET is_active=0 WHERE id=?").bind(id).run();
+  return c.json({ ok: true });
+});
+
+app.post("/api/par/bulk", async (c) => {
+  const body = await c.req.json<{ locationId: number; items: { skuId: number; par: number }[] }>();
+  const locationId = Number(body.locationId);
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!locationId) return c.json({ ok: false, message: "locationId required" }, 400);
+  if (items.length === 0) return c.json({ ok: false, message: "No items provided" }, 400);
+
+  const stmt = c.env.DB.prepare(`
+    INSERT INTO par_levels (sku_id, location_id, par_qty_tenths)
+    VALUES (?, ?, ?)
+    ON CONFLICT(sku_id, location_id)
+    DO UPDATE SET par_qty_tenths=excluded.par_qty_tenths
+  `);
+
+  const batch = items.map((it) => {
+    const skuId = Number(it.skuId);
+    const parTenths = toTenths(Number(it.par));
+    return stmt.bind(skuId, locationId, parTenths);
+  });
+
+  await c.env.DB.batch(batch);
+  return c.json({ ok: true, message: `Saved PAR for ${items.length} items.` });
 });
 
 app.post("/api/orders/send", async (c) => {
