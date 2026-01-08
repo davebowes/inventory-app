@@ -139,7 +139,7 @@ if (path.startsWith("/material-types/") && method === "DELETE") {
         p.par_qty,
         IFNULL(SUM(oh.qty), 0) AS total_on_hand
       FROM products p
-      LEFT JOIN on_hand oh ON oh.product_id = p.id
+      LEFT JOIN on_hands oh ON oh.product_id = p.id
       GROUP BY p.id
       ORDER BY p.name
       `
@@ -300,10 +300,10 @@ if ((used?.c ?? 0) > 0) {
 
   /* =======================
      ON-HAND (by location)
-     GET /onhand/:locationId
-     POST /onhand  [{product_id, location_id, qty}]
+     GET /on_hands/:locationId
+     POST /on_hands  [{product_id, location_id, qty}]
   ======================= */
-  if (path.startsWith("/onhand/") && method === "GET") {
+  if (path.startsWith("/on_hands/") && method === "GET") {
     const locationId = Number(path.split("/")[2]);
 
     const { results } = await env.DB.prepare(
@@ -315,7 +315,7 @@ if ((used?.c ?? 0) > 0) {
         IFNULL(oh.qty, 0) AS qty
       FROM product_locations pl
       JOIN products p ON p.id = pl.product_id
-      LEFT JOIN on_hand oh
+      LEFT JOIN on_hands oh
         ON oh.product_id = p.id
         AND oh.location_id = ?
       WHERE pl.location_id = ?
@@ -328,13 +328,13 @@ if ((used?.c ?? 0) > 0) {
     return json(results);
   }
 
-  if (path === "/onhand" && method === "POST") {
+  if (path === "/on_hands" && method === "POST") {
     const body = await readJson();
     if (!Array.isArray(body)) return json({ error: "Expected array" }, 400);
 
     const stmt = env.DB.prepare(
       `
-      INSERT INTO on_hand (product_id, location_id, qty)
+      INSERT INTO on_hands (product_id, location_id, qty)
       VALUES (?, ?, ?)
       ON CONFLICT(product_id, location_id)
       DO UPDATE SET qty = excluded.qty
@@ -370,7 +370,7 @@ if ((used?.c ?? 0) > 0) {
         IFNULL(SUM(oh.qty), 0) AS total_on_hand,
         MAX(p.par_qty - IFNULL(SUM(oh.qty), 0), 0) AS order_qty
       FROM products p
-      LEFT JOIN on_hand oh ON oh.product_id = p.id
+      LEFT JOIN on_hands oh ON oh.product_id = p.id
       GROUP BY p.id
       HAVING order_qty > 0
       ORDER BY p.material_type, p.name
