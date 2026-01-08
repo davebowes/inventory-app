@@ -1,340 +1,86 @@
-type Env = { DB: D1Database };
-
-export const onRequest = async ({ request, env }: { request: Request; env: Env }) => {
+export const onRequest = async ({ request, env }: any) => {
   const url = new URL(request.url);
   const path = url.pathname.replace("/api", "");
-  const method = request.method.toUpperCase();
+  const method = request.method;
 
+  // Utility
   const json = (data: any, status = 200) =>
     new Response(JSON.stringify(data), {
       status,
       headers: { "content-type": "application/json" },
-    });/* =======================
-   INVENTORY (ON HANDS)
-======================= */
-if (path === "/inventory" && method === "GET") {
-  const url = new URL(request.url);
-  const locationId = Number(url.searchParams.get("location_id"));
-  if (!locationId) return json({ error: "location_id required" }, 400);
-
-  const { results } = await env.DB.prepare(
-    `
-    SELECT
-      p.id as product_id,
-      p.name,
-      p.material_type,
-      p.sku,
-      p.par_qty,
-      COALESCE(oh.qty, 0) as on_hand_qty
-    FROM products p
-    INNER JOIN product_locations pl ON pl.product_id = p.id
-    LEFT JOIN on_hands oh
-      ON oh.product_id = p.id AND oh.location_id = pl.location_id
-    WHERE pl.location_id = ?
-    ORDER BY p.material_type, p.name
-    `
-  ).bind(locationId).all();
-
-  return json(results);
-}
-
-if (path === "/inventory" && method === "PUT") {
-  const body = await readJson();
-  const locationId = Number(body?.location_id);
-  const items = Array.isArray(body?.items) ? body.items : [];
-
-  if (!locationId) return json({ error: "location_id required" }, 400);
-
-  // sanitize: allow one decimal, store as REAL
-  const cleaned = items
-    .map((it: any) => ({
-      product_id: Number(it?.product_id),
-      qty: Number(it?.qty ?? 0),
-    }))
-    .filter((it: any) => it.product_id && Number.isFinite(it.qty));
-
-  // Upsert each record
-  const stmts = cleaned.map((it: any) =>
-    env.DB.prepare(
-      `
-      INSERT INTO on_hands (product_id, location_id, qty, updated_at)
-      VALUES (?, ?, ?, datetime('now'))
-      ON CONFLICT(product_id, location_id)
-      DO UPDATE SET qty=excluded.qty, updated_at=datetime('now')
-      `
-    ).bind(it.product_id, locationId, it.qty)
-  );
-
-  if (stmts.length) await env.DB.batch(stmts);
-
-  return json({ ok: true, count: stmts.length });
-}
-
-
-  // Helper: safe JSON body
-  const readJson = async () => {
-    try {
-      return await request.json();
-    } catch {
-      return null;
-    }
-  };
+    });
 
   /* =======================
-   MATERIAL TYPES
-======================= */
-if (path === "/material-types" && method === "GET") {
-  const { results } = await env.DB
-    .prepare(`SELECT id, name FROM material_types ORDER BY name`)
-    .all();
-  return json(results);
-}
-
-if (path === "/material-types" && method === "POST") {
-  const body = await readJson();
-  const name = String(body?.name ?? "").trim();
-  if (!name) return json({ error: "Name required" }, 400);
-
-  await env.DB.prepare(`INSERT INTO material_types (name) VALUES (?)`).bind(name).run();
-  return json({ ok: true });
-}
-
-if (path.startsWith("/material-types/") && method === "DELETE") {
-  const id = Number(path.split("/")[2]);
-  if (!id) return json({ error: "Invalid id" }, 400);
-
-  const used = await env.DB
-    .prepare(
-      `SELECT COUNT(*) as c
-       FROM products
-       WHERE material_type = (SELECT name FROM material_types WHERE id=?)`
-    )
-    .bind(id)
-    .first<any>();
-
-  if ((used?.c ?? 0) > 0) {
-    return json(
-      { error: "That type is in use by products. Change those products first." },
-      400
-    );
-  }
-
-  await env.DB.prepare(`DELETE FROM material_types WHERE id=?`).bind(id).run();
-  return json({ ok: true });
-}
-
-  
-  /* =======================
-     PRODUCTS (GET)
-     includes total_on_hand
+     PRODUCTS
   ======================= */
   if (path === "/products" && method === "GET") {
-    const { results } = await env.DB.prepare(
-      `
-      SELECT
-        p.id,
-        p.name,
-        p.material_type,
-        p.sku,
-        p.par_qty,
-        IFNULL(SUM(oh.qty), 0) AS total_on_hand
-      FROM products p
-      LEFT JOIN on_hands oh ON oh.product_id = p.id
-      GROUP BY p.id
-      ORDER BY p.name
-      `
-    ).all();
-
-    return json(results);
-  }
-
-  /* =======================
-     PRODUCTS (CRUD)
-  ======================= */
-  if (path === "/products" && method === "POST") {
-    const body = await readJson();
-    const name = String(body?.name ?? "").trim();
-    const material_type = String(body?.material_type ?? "").trim();
-    const skuRaw = body?.sku;
-    const sku = skuRaw == null ? null : String(skuRaw).trim();
-    const par_qty = Math.max(0, Math.floor(Number(body?.par_qty ?? 0)));
-
-    if (!name) return json({ error: "Product name required" }, 400);
-    if (!material_type) return json({ error: "Material type required" }, 400);
-
-    await env.DB.prepare(
-      `INSERT INTO products (name, material_type, sku, par_qty) VALUES (?, ?, ?, ?)`
-    )
-      .bind(name, material_type, sku || null, par_qty)
-      .run();
-
-    return json({ ok: true });
-  }
-
-  if (path.startsWith("/products/") && method === "PUT" && !path.endsWith("/locations")) {
-    const id = Number(path.split("/")[2]);
-    const body = await readJson();
-    const name = String(body?.name ?? "").trim();
-    const material_type = String(body?.material_type ?? "").trim();
-    const skuRaw = body?.sku;
-    const sku = skuRaw == null ? null : String(skuRaw).trim();
-    const par_qty = Math.max(0, Math.floor(Number(body?.par_qty ?? 0)));
-
-    if (!id) return json({ error: "Invalid id" }, 400);
-    if (!name) return json({ error: "Product name required" }, 400);
-    if (!material_type) return json({ error: "Material type required" }, 400);
-
-    await env.DB.prepare(
-      `UPDATE products SET name=?, material_type=?, sku=?, par_qty=? WHERE id=?`
-    )
-      .bind(name, material_type, sku || null, par_qty, id)
-      .run();
-
-    return json({ ok: true });
-  }
-
-  if (path.startsWith("/products/") && method === "DELETE" && !path.endsWith("/locations")) {
-    const id = Number(path.split("/")[2]);
-    if (!id) return json({ error: "Invalid id" }, 400);
-
-    await env.DB.prepare(`DELETE FROM products WHERE id=?`).bind(id).run();
-    return json({ ok: true });
-  }
-
-  /* =======================
-     LOCATIONS (GET)
-  ======================= */
-  if (path === "/locations" && method === "GET") {
-    const { results } = await env.DB.prepare(`SELECT * FROM locations ORDER BY name`).all();
-    return json(results);
-  }
-
-  /* =======================
-     LOCATIONS (CRUD)
-  ======================= */
-  if (path === "/locations" && method === "POST") {
-    const body = await readJson();
-    const name = String(body?.name ?? "").trim();
-    if (!name) return json({ error: "Name required" }, 400);
-
-    await env.DB.prepare(`INSERT INTO locations (name) VALUES (?)`).bind(name).run();
-    return json({ ok: true });
-  }
-
-  if (path.startsWith("/locations/") && method === "PUT") {
-    const id = Number(path.split("/")[2]);
-    const body = await readJson();
-    const name = String(body?.name ?? "").trim();
-    if (!id || !name) return json({ error: "Invalid" }, 400);
-
-    await env.DB.prepare(`UPDATE locations SET name=? WHERE id=?`).bind(name, id).run();
-    return json({ ok: true });
-  }
-
-  if (path.startsWith("/locations/") && method === "DELETE") {
-    const id = Number(path.split("/")[2]);
-    if (!id) return json({ error: "Invalid" }, 400);
-// Prevent deleting a location if any product is assigned to it
-const used = await env.DB
-  .prepare(`SELECT COUNT(*) as c FROM product_locations WHERE location_id=?`)
-  .bind(id)
-  .first<any>();
-
-if ((used?.c ?? 0) > 0) {
-  return json(
-    { error: "That location is assigned to products. Remove it from products first." },
-    400
-  );
-}
-
-    await env.DB.prepare(`DELETE FROM locations WHERE id=?`).bind(id).run();
-    return json({ ok: true });
-  }
-
-  /* =======================
-     PRODUCT ↔ LOCATION ASSIGNMENT
-     GET/PUT /products/:id/locations
-  ======================= */
-  if (path.match(/^\/products\/\d+\/locations$/) && method === "GET") {
-    const productId = Number(path.split("/")[2]);
-    if (!productId) return json({ error: "Invalid" }, 400);
-
-    const { results } = await env.DB.prepare(
-      `
-      SELECT l.id, l.name
-      FROM product_locations pl
-      JOIN locations l ON l.id = pl.location_id
-      WHERE pl.product_id = ?
-      ORDER BY l.name
-      `
-    )
-      .bind(productId)
+    const { results } = await env.DB
+      .prepare(
+        `
+        SELECT
+          p.id,
+          p.name,
+          p.material_type,
+          p.sku,
+          p.par_qty,
+          IFNULL(SUM(oh.qty), 0) AS total_on_hand
+        FROM products p
+        LEFT JOIN on_hand oh ON oh.product_id = p.id
+        GROUP BY p.id
+        ORDER BY p.name
+        `
+      )
       .all();
 
     return json(results);
   }
 
-  if (path.match(/^\/products\/\d+\/locations$/) && method === "PUT") {
-    const productId = Number(path.split("/")[2]);
-    const body = await readJson();
-    const locationIds: number[] = Array.isArray(body?.locationIds)
-      ? body.locationIds.map((x: any) => Number(x)).filter((x: number) => Number.isFinite(x))
-      : [];
+  /* =======================
+     LOCATIONS
+  ======================= */
+  if (path === "/locations" && method === "GET") {
+    const { results } = await env.DB
+      .prepare(`SELECT * FROM locations ORDER BY name`)
+      .all();
 
-    if (!productId) return json({ error: "Invalid" }, 400);
-
-    // Replace mapping
-    await env.DB.prepare(`DELETE FROM product_locations WHERE product_id=?`)
-      .bind(productId)
-      .run();
-
-    if (locationIds.length) {
-      const stmt = env.DB.prepare(
-        `INSERT INTO product_locations (product_id, location_id) VALUES (?, ?)`
-      );
-      await env.DB.batch(locationIds.map((lid) => stmt.bind(productId, lid)));
-    }
-
-    return json({ ok: true });
+    return json(results);
   }
 
   /* =======================
      ON-HAND (by location)
-     GET /on_hands/:locationId
-     POST /on_hands  [{product_id, location_id, qty}]
   ======================= */
-  if (path.startsWith("/on_hands/") && method === "GET") {
+  if (path.startsWith("/onhand/") && method === "GET") {
     const locationId = Number(path.split("/")[2]);
 
-    const { results } = await env.DB.prepare(
-      `
-      SELECT
-        p.id AS product_id,
-        p.name,
-        p.material_type,
-        IFNULL(oh.qty, 0) AS qty
-      FROM product_locations pl
-      JOIN products p ON p.id = pl.product_id
-      LEFT JOIN on_hands oh
-        ON oh.product_id = p.id
-        AND oh.location_id = ?
-      WHERE pl.location_id = ?
-      ORDER BY p.name
-      `
-    )
+    const { results } = await env.DB
+      .prepare(
+        `
+        SELECT
+          p.id AS product_id,
+          p.name,
+          p.material_type,
+          IFNULL(oh.qty, 0) AS qty
+        FROM product_locations pl
+        JOIN products p ON p.id = pl.product_id
+        LEFT JOIN on_hand oh
+          ON oh.product_id = p.id
+          AND oh.location_id = ?
+        WHERE pl.location_id = ?
+        ORDER BY p.name
+        `
+      )
       .bind(locationId, locationId)
       .all();
 
     return json(results);
   }
 
-  if (path === "/on_hands" && method === "POST") {
-    const body = await readJson();
-    if (!Array.isArray(body)) return json({ error: "Expected array" }, 400);
+  if (path === "/onhand" && method === "POST") {
+    const body = await request.json();
 
     const stmt = env.DB.prepare(
       `
-      INSERT INTO on_hands (product_id, location_id, qty)
+      INSERT INTO on_hand (product_id, location_id, qty)
       VALUES (?, ?, ?)
       ON CONFLICT(product_id, location_id)
       DO UPDATE SET qty = excluded.qty
@@ -342,11 +88,7 @@ if ((used?.c ?? 0) > 0) {
     );
 
     const batch = body.map((row: any) =>
-      stmt.bind(
-        Number(row.product_id),
-        Number(row.location_id),
-        Math.max(0, Math.floor(Number(row.qty ?? 0)))
-      )
+      stmt.bind(row.product_id, row.location_id, Math.max(0, Math.floor(row.qty)))
     );
 
     await env.DB.batch(batch);
@@ -354,91 +96,31 @@ if ((used?.c ?? 0) > 0) {
   }
 
   /* =======================
-     REORDER
-     Global PAR vs total on-hand across all locations
-     Only returns items with order_qty > 0
+     REORDER (GLOBAL PAR)
   ======================= */
   if (path === "/reorder" && method === "GET") {
-    const { results } = await env.DB.prepare(
-      `
-      SELECT
-        p.id,
-        p.name,
-        p.material_type,
-        p.sku,
-        p.par_qty,
-        IFNULL(SUM(oh.qty), 0) AS total_on_hand,
-        MAX(p.par_qty - IFNULL(SUM(oh.qty), 0), 0) AS order_qty
-      FROM products p
-      LEFT JOIN on_hands oh ON oh.product_id = p.id
-      GROUP BY p.id
-      HAVING order_qty > 0
-      ORDER BY p.material_type, p.name
-      `
-    ).all();
+    const { results } = await env.DB
+      .prepare(
+        `
+        SELECT
+          p.id,
+          p.name,
+          p.material_type,
+          p.sku,
+          p.par_qty,
+          IFNULL(SUM(oh.qty), 0) AS total_on_hand,
+          MAX(p.par_qty - IFNULL(SUM(oh.qty), 0), 0) AS order_qty
+        FROM products p
+        LEFT JOIN on_hand oh ON oh.product_id = p.id
+        GROUP BY p.id
+        HAVING order_qty > 0
+        ORDER BY p.material_type, p.name
+        `
+      )
+      .all();
 
     return json(results);
   }
-/* =======================
-   INVENTORY (ON HANDS)
-======================= */
-if (path === "/inventory" && method === "GET") {
-  const url = new URL(request.url);
-  const locationId = Number(url.searchParams.get("location_id"));
-  if (!locationId) return json({ error: "location_id required" }, 400);
-
-  const { results } = await env.DB.prepare(
-    `
-    SELECT
-      p.id as product_id,
-      p.name,
-      p.material_type,
-      p.sku,
-      p.par_qty,
-      COALESCE(oh.qty, 0) as on_hand_qty
-    FROM products p
-    INNER JOIN product_locations pl ON pl.product_id = p.id
-    LEFT JOIN on_hands oh
-      ON oh.product_id = p.id AND oh.location_id = pl.location_id
-    WHERE pl.location_id = ?
-    ORDER BY p.material_type, p.name
-    `
-  ).bind(locationId).all();
-
-  return json(results);
-}
-
-if (path === "/inventory" && method === "PUT") {
-  const body = await readJson();
-  const locationId = Number(body?.location_id);
-  const items = Array.isArray(body?.items) ? body.items : [];
-
-  if (!locationId) return json({ error: "location_id required" }, 400);
-
-  // sanitize: allow one decimal, store as REAL
-  const cleaned = items
-    .map((it: any) => ({
-      product_id: Number(it?.product_id),
-      qty: Number(it?.qty ?? 0),
-    }))
-    .filter((it: any) => it.product_id && Number.isFinite(it.qty));
-
-  // Upsert each record
-  const stmts = cleaned.map((it: any) =>
-    env.DB.prepare(
-      `
-      INSERT INTO on_hands (product_id, location_id, qty, updated_at)
-      VALUES (?, ?, ?, datetime('now'))
-      ON CONFLICT(product_id, location_id)
-      DO UPDATE SET qty=excluded.qty, updated_at=datetime('now')
-      `
-    ).bind(it.product_id, locationId, it.qty)
-  );
-
-  if (stmts.length) await env.DB.batch(stmts);
-
-  return json({ ok: true, count: stmts.length });
-}
 
   return json({ error: "Not found" }, 404);
 };
