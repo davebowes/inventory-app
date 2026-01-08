@@ -9,7 +9,67 @@ export const onRequest = async ({ request, env }: { request: Request; env: Env }
     new Response(JSON.stringify(data), {
       status,
       headers: { "content-type": "application/json" },
-    });
+    });/* =======================
+   INVENTORY (ON HANDS)
+======================= */
+if (path === "/inventory" && method === "GET") {
+  const url = new URL(request.url);
+  const locationId = Number(url.searchParams.get("location_id"));
+  if (!locationId) return json({ error: "location_id required" }, 400);
+
+  const { results } = await env.DB.prepare(
+    `
+    SELECT
+      p.id as product_id,
+      p.name,
+      p.material_type,
+      p.sku,
+      p.par_qty,
+      COALESCE(oh.qty, 0) as on_hand_qty
+    FROM products p
+    INNER JOIN product_locations pl ON pl.product_id = p.id
+    LEFT JOIN on_hands oh
+      ON oh.product_id = p.id AND oh.location_id = pl.location_id
+    WHERE pl.location_id = ?
+    ORDER BY p.material_type, p.name
+    `
+  ).bind(locationId).all();
+
+  return json(results);
+}
+
+if (path === "/inventory" && method === "PUT") {
+  const body = await readJson();
+  const locationId = Number(body?.location_id);
+  const items = Array.isArray(body?.items) ? body.items : [];
+
+  if (!locationId) return json({ error: "location_id required" }, 400);
+
+  // sanitize: allow one decimal, store as REAL
+  const cleaned = items
+    .map((it: any) => ({
+      product_id: Number(it?.product_id),
+      qty: Number(it?.qty ?? 0),
+    }))
+    .filter((it: any) => it.product_id && Number.isFinite(it.qty));
+
+  // Upsert each record
+  const stmts = cleaned.map((it: any) =>
+    env.DB.prepare(
+      `
+      INSERT INTO on_hands (product_id, location_id, qty, updated_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(product_id, location_id)
+      DO UPDATE SET qty=excluded.qty, updated_at=datetime('now')
+      `
+    ).bind(it.product_id, locationId, it.qty)
+  );
+
+  if (stmts.length) await env.DB.batch(stmts);
+
+  return json({ ok: true, count: stmts.length });
+}
+
 
   // Helper: safe JSON body
   const readJson = async () => {
@@ -319,6 +379,66 @@ if ((used?.c ?? 0) > 0) {
 
     return json(results);
   }
+/* =======================
+   INVENTORY (ON HANDS)
+======================= */
+if (path === "/inventory" && method === "GET") {
+  const url = new URL(request.url);
+  const locationId = Number(url.searchParams.get("location_id"));
+  if (!locationId) return json({ error: "location_id required" }, 400);
+
+  const { results } = await env.DB.prepare(
+    `
+    SELECT
+      p.id as product_id,
+      p.name,
+      p.material_type,
+      p.sku,
+      p.par_qty,
+      COALESCE(oh.qty, 0) as on_hand_qty
+    FROM products p
+    INNER JOIN product_locations pl ON pl.product_id = p.id
+    LEFT JOIN on_hands oh
+      ON oh.product_id = p.id AND oh.location_id = pl.location_id
+    WHERE pl.location_id = ?
+    ORDER BY p.material_type, p.name
+    `
+  ).bind(locationId).all();
+
+  return json(results);
+}
+
+if (path === "/inventory" && method === "PUT") {
+  const body = await readJson();
+  const locationId = Number(body?.location_id);
+  const items = Array.isArray(body?.items) ? body.items : [];
+
+  if (!locationId) return json({ error: "location_id required" }, 400);
+
+  // sanitize: allow one decimal, store as REAL
+  const cleaned = items
+    .map((it: any) => ({
+      product_id: Number(it?.product_id),
+      qty: Number(it?.qty ?? 0),
+    }))
+    .filter((it: any) => it.product_id && Number.isFinite(it.qty));
+
+  // Upsert each record
+  const stmts = cleaned.map((it: any) =>
+    env.DB.prepare(
+      `
+      INSERT INTO on_hands (product_id, location_id, qty, updated_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(product_id, location_id)
+      DO UPDATE SET qty=excluded.qty, updated_at=datetime('now')
+      `
+    ).bind(it.product_id, locationId, it.qty)
+  );
+
+  if (stmts.length) await env.DB.batch(stmts);
+
+  return json({ ok: true, count: stmts.length });
+}
 
   return json({ error: "Not found" }, 404);
 };
