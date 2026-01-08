@@ -23,6 +23,15 @@ type MaterialType = {
   name: string;
 };
 
+type InventoryRow = {
+  product_id: number;
+  name: string;
+  material_type: string;
+  sku: string | null;
+  par_qty: number;
+  on_hand_qty: number | "";
+};
+
 /* =====================
    API HELPER
 ===================== */
@@ -49,6 +58,8 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
    APP
 ===================== */
 export default function App() {
+  const [view, setView] = useState<"onhand" | "settings">("onhand");
+
   return (
     <div style={styles.app}>
       <header style={styles.header}>
@@ -62,13 +73,192 @@ export default function App() {
       </header>
 
       <main style={styles.main}>
-        <Settings />
+        <div style={styles.tabs}>
+          <TabButton active={view === "onhand"} onClick={() => setView("onhand")}>
+            On-Hand
+          </TabButton>
+          <TabButton active={view === "settings"} onClick={() => setView("settings")}>
+            Settings
+          </TabButton>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          {view === "onhand" ? <OnHandEntry /> : <Settings />}
+        </div>
       </main>
 
       <footer style={styles.footer}>
         <span style={styles.footerText}>Mobile-ready • Cloudflare Pages</span>
       </footer>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: any;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        ...styles.tabBtn,
+        ...(active ? styles.tabActive : null),
+      }}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+/* =====================
+   ON-HAND ENTRY
+===================== */
+function OnHandEntry() {
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [locationId, setLocationId] = useState<number>(0);
+  const [rows, setRows] = useState<InventoryRow[]>([]);
+  const [msg, setMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function loadLocations() {
+    const locs = await api<Location[]>("/locations");
+    setLocations(locs);
+    if (!locationId && locs.length) setLocationId(locs[0].id);
+  }
+
+  async function loadInventory(lid: number) {
+    const data = await api<any[]>(`/inventory?location_id=${lid}`);
+    setRows(
+      data.map((r) => ({
+        product_id: Number(r.product_id),
+        name: String(r.name ?? ""),
+        material_type: String(r.material_type ?? ""),
+        sku: r.sku ?? null,
+        par_qty: Number(r.par_qty ?? 0),
+        on_hand_qty: Number(r.on_hand_qty ?? 0),
+      }))
+    );
+  }
+
+  useEffect(() => {
+    loadLocations().catch((e) => setMsg(e.message || String(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (locationId) {
+      loadInventory(locationId).catch((e) => setMsg(e.message || String(e)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationId]);
+
+  function setQty(product_id: number, val: string) {
+    // allow blank while typing
+    const next: number | "" = val === "" ? "" : Number(val);
+    setRows((prev) =>
+      prev.map((r) => (r.product_id === product_id ? { ...r, on_hand_qty: next } : r))
+    );
+  }
+
+  async function save() {
+    if (!locationId) return;
+    setSaving(true);
+    setMsg("");
+    try {
+      const items = rows.map((r) => ({
+        product_id: r.product_id,
+        qty: r.on_hand_qty === "" ? 0 : Number(r.on_hand_qty || 0),
+      }));
+
+      await api("/inventory", {
+        method: "PUT",
+        body: JSON.stringify({ location_id: locationId, items }),
+      });
+
+      setMsg("Saved on-hands.");
+      await loadInventory(locationId);
+    } catch (e: any) {
+      setMsg(e?.message || "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="On-Hand Entry">
+      <div style={styles.helpBlock}>
+        Select a location, then enter current on-hand. (Decimals allowed here; ordering will round to whole
+        units later.)
+      </div>
+
+      <label style={styles.label}>
+        Location
+        <select
+          value={locationId || ""}
+          onChange={(e) => setLocationId(Number(e.target.value))}
+          style={styles.input}
+        >
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {msg ? <div style={styles.msg}>{msg}</div> : null}
+
+      <div style={{ overflowX: "auto", marginTop: 12 }}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Material</th>
+              <th style={styles.th}>Product</th>
+              <th style={styles.th}>SKU</th>
+              <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.product_id}>
+                <td style={styles.tdMuted}>{r.material_type}</td>
+                <td style={styles.td}>{r.name}</td>
+                <td style={styles.tdMuted}>{r.sku ?? ""}</td>
+                <td style={{ ...styles.td, textAlign: "right" }}>
+                  <input
+                    value={r.on_hand_qty}
+                    onChange={(e) => setQty(r.product_id, e.target.value)}
+                    style={{ ...styles.input, width: 120, textAlign: "right" }}
+                    inputMode="decimal"
+                    placeholder="0"
+                  />
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td style={styles.tdMuted} colSpan={4}>
+                  No products are assigned to this location yet. (Go to Settings → Products → Locations…)
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+        <button style={styles.primaryBtn} onClick={save} disabled={saving} type="button">
+          {saving ? "Saving…" : "Save On-Hands"}
+        </button>
+      </div>
+    </Card>
   );
 }
 
@@ -102,29 +292,6 @@ function Settings() {
         )}
       </div>
     </Card>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: any;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        ...styles.tabBtn,
-        ...(active ? styles.tabActive : null),
-      }}
-      type="button"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -169,18 +336,17 @@ function LocationsAdmin() {
   }
 
   async function del(id: number) {
-  if (!confirm("Delete this location?")) return;
+    if (!confirm("Delete this location?")) return;
 
-  setMsg("");
-  try {
-    await api(`/locations/${id}`, { method: "DELETE" });
-    await load();
-    setMsg("Location deleted.");
-  } catch (e: any) {
-    setMsg(e?.message || "Unable to delete location.");
+    setMsg("");
+    try {
+      await api(`/locations/${id}`, { method: "DELETE" });
+      await load();
+      setMsg("Location deleted.");
+    } catch (e: any) {
+      setMsg(e?.message || "Unable to delete location.");
+    }
   }
-}
-
 
   return (
     <>
@@ -284,7 +450,6 @@ function MaterialTypesAdmin() {
       await load();
       setMsg("Material type deleted.");
     } catch (e: any) {
-      // API sends JSON error or plain text. Show it.
       setMsg(e?.message || "Unable to delete.");
     }
   }
@@ -423,7 +588,6 @@ function ProductsAdmin() {
     setBusy(true);
     setMsg("");
     try {
-      // IMPORTANT: only send DB fields (not total_on_hand)
       await api(`/products/${p.id}`, {
         method: "PUT",
         body: JSON.stringify({ name, material_type, sku, par_qty }),
@@ -565,7 +729,9 @@ function ProductsAdmin() {
                     value={p.material_type}
                     onChange={(e) =>
                       setProducts((prev) =>
-                        prev.map((x) => (x.id === p.id ? { ...x, material_type: e.target.value } : x))
+                        prev.map((x) =>
+                          x.id === p.id ? { ...x, material_type: e.target.value } : x
+                        )
                       )
                     }
                     style={styles.input}
@@ -624,13 +790,28 @@ function ProductsAdmin() {
 
                 <td style={{ ...styles.td, textAlign: "right" }}>
                   <div style={styles.actions}>
-                    <button style={styles.btn} onClick={() => openLocations(p)} disabled={busy} type="button">
+                    <button
+                      style={styles.btn}
+                      onClick={() => openLocations(p)}
+                      disabled={busy}
+                      type="button"
+                    >
                       Locations…
                     </button>
-                    <button style={styles.primaryBtnSmall} onClick={() => saveProduct(p)} disabled={busy} type="button">
+                    <button
+                      style={styles.primaryBtnSmall}
+                      onClick={() => saveProduct(p)}
+                      disabled={busy}
+                      type="button"
+                    >
                       Save
                     </button>
-                    <button style={styles.btn} onClick={() => deleteProduct(p.id)} disabled={busy} type="button">
+                    <button
+                      style={styles.btn}
+                      onClick={() => deleteProduct(p.id)}
+                      disabled={busy}
+                      type="button"
+                    >
                       Delete
                     </button>
                   </div>
