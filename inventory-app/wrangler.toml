@@ -1,0 +1,13 @@
+name = "inventory-app"
+compatibility_date = "2025-12-01"
+
+# Cloudflare Pages will use this to locate the built assets.
+pages_build_output_dir = "dist"
+
+# For local development with `wrangler pages dev`.
+# In production (Cloudflare Pages), configure the D1 binding in the Pages dashboard.
+[[d1_databases]]
+binding = "DB"
+database_name = "db_inventory"
+# Set this if you use Wrangler CLI for D1 commands locally.
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
