@@ -169,12 +169,18 @@ function LocationsAdmin() {
   }
 
   async function del(id: number) {
-    if (!confirm("Delete this location?")) return;
-    setMsg("");
+  if (!confirm("Delete this location?")) return;
+
+  setMsg("");
+  try {
     await api(`/locations/${id}`, { method: "DELETE" });
     await load();
     setMsg("Location deleted.");
+  } catch (e: any) {
+    setMsg(e?.message || "Unable to delete location.");
   }
+}
+
 
   return (
     <>
