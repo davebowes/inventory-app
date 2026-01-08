@@ -174,6 +174,18 @@ if (path.startsWith("/material-types/") && method === "DELETE") {
   if (path.startsWith("/locations/") && method === "DELETE") {
     const id = Number(path.split("/")[2]);
     if (!id) return json({ error: "Invalid" }, 400);
+// Prevent deleting a location if any product is assigned to it
+const used = await env.DB
+  .prepare(`SELECT COUNT(*) as c FROM product_locations WHERE location_id=?`)
+  .bind(id)
+  .first<any>();
+
+if ((used?.c ?? 0) > 0) {
+  return json(
+    { error: "That location is assigned to products. Remove it from products first." },
+    400
+  );
+}
 
     await env.DB.prepare(`DELETE FROM locations WHERE id=?`).bind(id).run();
     return json({ ok: true });
